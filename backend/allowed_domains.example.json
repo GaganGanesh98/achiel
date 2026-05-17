@@ -1,0 +1,12 @@
+{
+  "srh-hochschule-berlin.de": {"name": "SRH Hochschule Berlin", "country": "DE", "city": "Berlin"},
+  "tu-berlin.de": {"name": "Technische Universität Berlin", "country": "DE", "city": "Berlin"},
+  "hu-berlin.de": {"name": "Humboldt-Universität zu Berlin", "country": "DE", "city": "Berlin"},
+  "fu-berlin.de": {"name": "Freie Universität Berlin", "country": "DE", "city": "Berlin"},
+  "iitb.ac.in": {"name": "IIT Bombay", "country": "IN", "city": "Mumbai"},
+  "iitd.ac.in": {"name": "IIT Delhi", "country": "IN", "city": "Delhi"},
+  "mit.edu": {"name": "MIT", "country": "US", "city": "Cambridge"},
+  "stanford.edu": {"name": "Stanford University", "country": "US", "city": "Stanford"},
+  "ox.ac.uk": {"name": "University of Oxford", "country": "GB", "city": "Oxford"},
+  "cam.ac.uk": {"name": "University of Cambridge", "country": "GB", "city": "Cambridge"}
+}

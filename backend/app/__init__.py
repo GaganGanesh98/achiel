@@ -1,0 +1,1 @@
+# CampusVoice FastAPI application package
