@@ -14,3 +14,9 @@ migrate:
 
 migration:
 	cd backend && uv run alembic revision --autogenerate -m "$(name)"
+
+test:
+	cd backend && uv run pytest -q
+
+seed-domains:
+	cd backend && uv run python scripts/seed_allowed_domains.py
