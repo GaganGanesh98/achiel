@@ -163,6 +163,7 @@ export default function RegisterPage() {
                   id="email"
                   type="email"
                   placeholder="you@srh.de"
+                  suppressHydrationWarning
                   {...register("email")}
                   onBlur={() => emailValue && lookupDomain(emailValue)}
                 />
@@ -199,6 +200,7 @@ export default function RegisterPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    suppressHydrationWarning
                     {...register("password")}
                   />
                   <button
@@ -221,6 +223,7 @@ export default function RegisterPage() {
                 <Input
                   id="confirmPassword"
                   type={showPassword ? "text" : "password"}
+                  suppressHydrationWarning
                   {...register("confirmPassword")}
                 />
                 {errors.confirmPassword && (
@@ -232,7 +235,11 @@ export default function RegisterPage() {
                 <label className="text-sm font-medium" htmlFor="display_name">
                   Display name
                 </label>
-                <Input id="display_name" {...register("display_name")} />
+                <Input
+                  id="display_name"
+                  suppressHydrationWarning
+                  {...register("display_name")}
+                />
                 {errors.display_name && (
                   <p className="text-xs text-destructive">{errors.display_name.message}</p>
                 )}
@@ -244,6 +251,7 @@ export default function RegisterPage() {
                 </label>
                 <select
                   id="country"
+                  suppressHydrationWarning
                   className={cn(
                     "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   )}
@@ -264,7 +272,12 @@ export default function RegisterPage() {
                 <label className="text-sm font-medium" htmlFor="program">
                   Program / major <span className="text-muted-foreground">(optional)</span>
                 </label>
-                <Input id="program" placeholder="e.g. MSc AI/ML" {...register("program")} />
+                <Input
+                  id="program"
+                  placeholder="e.g. MSc AI/ML"
+                  suppressHydrationWarning
+                  {...register("program")}
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -273,6 +286,7 @@ export default function RegisterPage() {
                 </label>
                 <select
                   id="year_of_study"
+                  suppressHydrationWarning
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   {...register("year_of_study")}
                 >
