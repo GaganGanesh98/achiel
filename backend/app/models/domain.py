@@ -14,6 +14,7 @@ class AllowedDomainSource(str, PyEnum):
     SEED = "seed"
     ADMIN = "admin"
     PATTERN = "pattern"
+    MANUAL = "manual"
 
 
 class PendingDomainStatus(str, PyEnum):

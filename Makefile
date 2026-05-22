@@ -19,4 +19,4 @@ test:
 	cd backend && uv run pytest -q
 
 seed-domains:
-	cd backend && uv run python scripts/seed_allowed_domains.py
+	cd backend && PYTHONPATH=. uv run python scripts/seed_allowed_domains.py

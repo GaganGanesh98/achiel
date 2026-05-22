@@ -53,11 +53,16 @@ async def clean_domain_tables(db: AsyncSession) -> AsyncIterator[None]:
     await db.commit()
 
 
-async def allow_domain(db: AsyncSession, domain: str) -> None:
+async def allow_domain(
+    db: AsyncSession,
+    domain: str,
+    *,
+    source: AllowedDomainSource = AllowedDomainSource.ADMIN,
+) -> None:
     db.add(
         AllowedDomain(
             domain=domain,
-            source=AllowedDomainSource.ADMIN,
+            source=source,
             added_by="test",
         )
     )
