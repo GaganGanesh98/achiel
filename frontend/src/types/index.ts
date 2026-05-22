@@ -4,6 +4,7 @@ export type Topic =
   | "cost_of_living"
   | "academics"
   | "housing"
+  | "jobs"
   | "general";
 
 export type PostStatus = "published" | "flagged" | "removed";
@@ -67,5 +68,6 @@ export const TOPIC_LABELS: Record<Topic, string> = {
   cost_of_living: "Cost of Living",
   academics: "Academics",
   housing: "Housing",
+  jobs: "Jobs",
   general: "General",
 };

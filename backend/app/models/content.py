@@ -13,6 +13,7 @@ class Topic(str, PyEnum):
     COST_OF_LIVING = "cost_of_living"
     ACADEMICS = "academics"
     HOUSING = "housing"
+    JOBS = "jobs"
     GENERAL = "general"
 
 
