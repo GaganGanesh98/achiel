@@ -14,15 +14,37 @@ Caveats Cursor should NOT pretend away:
   leetspeak ($h!t) but won't catch novel circumventions. Pair with the report queue.
 """
 
+import json
+from pathlib import Path
+
 from better_profanity import profanity
 
-# Init once at import. better_profanity uses its bundled list by default.
+from app.core.config import settings
+
 profanity.load_censor_words()
 
-# Extend with severe terms that should outright reject, not just censor.
-# Keep this list private and short. Don't enumerate slurs in source — reference an env-loaded
-# file in real deployment. For MVP scaffold, leave a placeholder so Cursor doesn't auto-fill it.
-SEVERE_TERMS: set[str] = set()  # populate from env or external file before deploy
+
+def _load_severe_terms() -> set[str]:
+    terms: set[str] = set()
+
+    path: Path = settings.severe_terms_path
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip().lower()
+            if line and not line.startswith("#"):
+                terms.add(line)
+
+    try:
+        extra = json.loads(settings.SEVERE_TERMS_JSON)
+        if isinstance(extra, list):
+            terms.update(str(t).strip().lower() for t in extra if str(t).strip())
+    except json.JSONDecodeError:
+        pass
+
+    return terms
+
+
+SEVERE_TERMS: set[str] = _load_severe_terms()
 
 
 class Unsafe(Exception):

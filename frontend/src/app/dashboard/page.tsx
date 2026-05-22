@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Post, Topic } from "@/types";
@@ -20,14 +21,34 @@ const TOPICS: (Topic | "all")[] = [
 ];
 
 export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-3xl py-6 px-4">
+          <p className="text-sm text-neutral-500">Loading…</p>
+        </main>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const universityId = searchParams.get("university_id") ?? undefined;
   const [topic, setTopic] = useState<Topic | "all">("all");
   const [sort, setSort] = useState<"new" | "top">("new");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["feed", topic, sort],
+    queryKey: ["feed", topic, sort, universityId],
     queryFn: () =>
       api<Post[]>("/posts", {
-        query: { topic: topic === "all" ? undefined : topic, sort },
+        query: {
+          topic: topic === "all" ? undefined : topic,
+          sort,
+          university_id: universityId,
+        },
       }),
   });
 
@@ -35,12 +56,14 @@ export default function DashboardPage() {
     <main className="mx-auto max-w-3xl py-6 px-4 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Global Dashboard</h1>
-        <Link
-          href="/me"
-          className="text-sm text-neutral-600 hover:text-black"
-        >
-          Account
-        </Link>
+        <nav className="flex gap-3 text-sm text-neutral-600">
+          <Link href="/universities" className="hover:text-black">
+            Universities
+          </Link>
+          <Link href="/me" className="hover:text-black">
+            Account
+          </Link>
+        </nav>
       </header>
 
       <Composer onPosted={() => refetch()} />

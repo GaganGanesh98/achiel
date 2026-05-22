@@ -2,20 +2,18 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api import auth_router, posts_router, universities_router
+from app.core.config import settings
+from app.core.limiter import limiter
 from app.middleware.profanity import ProfanityGuardMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 def create_app() -> FastAPI:
@@ -25,7 +23,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

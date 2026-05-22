@@ -92,22 +92,27 @@ Everything under:
 
 ## Local Dev
 
-```bash
-# 1. Spin up db + redis
-docker-compose up -d
+Project root: `~/achhiel`
 
-# 2. Backend
-cd backend
-uv sync                              # or: poetry install
-cp .env.example .env                 # fill in JWT_SECRET, ALLOWED_EMAIL_DOMAINS
+```bash
+# 1. Remove any stale containers, then spin up db + redis
+cd ~/achhiel
+docker rm -f campusvoice-redis campusvoice-postgres 2>/dev/null || true
+docker compose up -d
+# Postgres → port 5434, Redis → port 6379
+
+# 2. Backend (new terminal)
+cd ~/achhiel/backend
+uv sync
 uv run alembic upgrade head
 uv run uvicorn main:app --reload
+# API: http://localhost:8000
 
-# 3. Frontend (new terminal)
-cd frontend
+# 3. Frontend (another terminal)
+cd ~/achhiel/frontend
 npm install
-cp .env.local.example .env.local
 npm run dev
+# UI: http://localhost:3000
 ```
 
 ## GDPR Notes

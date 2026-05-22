@@ -25,7 +25,7 @@ export function getToken(): string | undefined {
   return Cookies.get(TOKEN_COOKIE);
 }
 
-type Method = "GET" | "POST" | "PATCH" | "DELETE";
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 interface ApiOptions {
   method?: Method;

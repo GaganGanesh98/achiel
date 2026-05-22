@@ -1,12 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.db import get_db
+from app.core.limiter import limiter
 from app.core.security import get_current_user, require_verified
 from app.models import (
     Comment,
@@ -92,7 +93,9 @@ async def list_feed(
 
 
 @router.post("", response_model=PostOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def create_post(
+    request: Request,
     payload: PostCreate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_verified),

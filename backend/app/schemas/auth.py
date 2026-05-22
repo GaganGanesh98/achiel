@@ -51,5 +51,19 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=2, max_length=60)
+    country: str | None = Field(default=None, min_length=2, max_length=2)
+
+    @field_validator("display_name")
+    @classmethod
+    def no_obvious_handles(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if v.strip().lower() in {"admin", "moderator", "root", "system"}:
+            raise ValueError("Reserved display name")
+        return v.strip()
+
+
 class VerifyEmailRequest(BaseModel):
     token: str

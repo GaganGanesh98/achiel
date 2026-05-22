@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.limiter import limiter
 from app.core.redis_client import get_redis
 from app.core.security import (
     create_access_token,
@@ -17,6 +18,7 @@ from app.schemas.auth import (
     UserLogin,
     UserOut,
     UserRegister,
+    UserUpdate,
     VerifyEmailRequest,
 )
 from app.services import verification as verif
@@ -26,7 +28,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     payload: UserRegister,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
@@ -96,5 +100,24 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
 
 
 @router.get("/me", response_model=UserOut)
-async def me(user: User = Depends(get_current_user_required)) -> User:
+async def me(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user_required),
+) -> User:
+    await db.refresh(user, ["university"])
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    payload: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user_required),
+) -> User:
+    if payload.display_name is not None:
+        user.display_name = payload.display_name
+    if payload.country is not None:
+        user.country = payload.country.upper() if payload.country else None
+    await db.commit()
+    await db.refresh(user, ["university"])
     return user

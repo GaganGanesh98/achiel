@@ -12,9 +12,12 @@ Why domain allowlist over a regex like r'@.+\\.edu$':
 - Allowlist is boring but correct
 """
 
+import logging
 import secrets
-from datetime import timedelta
+import smtplib
+from email.message import EmailMessage
 
+import httpx
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models import University, User, VerificationStatus
 
+logger = logging.getLogger(__name__)
 
 OTP_TTL_SECONDS = 15 * 60  # 15 min
 
@@ -42,8 +46,6 @@ async def get_or_reject_university(db: AsyncSession, email: str) -> University:
     """Returns the University row for this email's domain, or raises."""
     domain = extract_domain(email)
 
-    # settings.ALLOWED_EMAIL_DOMAINS is a dict[str, dict] loaded from env/JSON:
-    #   {"srh-hochschule-berlin.de": {"name": "SRH Berlin", "country": "DE", "city": "Berlin"}, ...}
     meta = settings.ALLOWED_EMAIL_DOMAINS.get(domain)
     if not meta:
         raise DomainNotAllowed(
@@ -51,7 +53,6 @@ async def get_or_reject_university(db: AsyncSession, email: str) -> University:
             f"Contact support if your institution should be added."
         )
 
-    # Upsert the university so the first user from a school populates it
     result = await db.execute(select(University).where(University.domain == domain))
     uni = result.scalar_one_or_none()
     if uni is None:
@@ -93,12 +94,73 @@ async def mark_verified(db: AsyncSession, user: User) -> User:
     return user
 
 
+def _otp_email_body(code: str) -> tuple[str, str]:
+    subject = "Your CampusVoice verification code"
+    text = (
+        f"Your verification code is: {code}\n\n"
+        f"It expires in {OTP_TTL_SECONDS // 60} minutes.\n"
+    )
+    html = (
+        f"<p>Your verification code is: <strong>{code}</strong></p>"
+        f"<p>It expires in {OTP_TTL_SECONDS // 60} minutes.</p>"
+    )
+    return subject, text, html  # type: ignore[return-value]
+
+
+async def _send_via_resend(to: str, subject: str, text: str, html: str) -> None:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": settings.resend_from,
+                "to": [to],
+                "subject": subject,
+                "text": text,
+                "html": html,
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+
+
+def _send_via_smtp(to: str, subject: str, text: str, html: str) -> None:
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+        smtp.starttls()
+        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        smtp.send_message(msg)
+
+
 async def send_otp_email(to: str, code: str) -> None:
-    """
-    Stub. Wire this to your SMTP / SendGrid / Resend / Postmark of choice.
-    In dev, just log the code so Cursor can test the flow without SMTP setup.
-    """
+    subject = "Your CampusVoice verification code"
+    text = (
+        f"Your verification code is: {code}\n\n"
+        f"It expires in {OTP_TTL_SECONDS // 60} minutes.\n"
+    )
+    html = (
+        f"<p>Your verification code is: <strong>{code}</strong></p>"
+        f"<p>It expires in {OTP_TTL_SECONDS // 60} minutes.</p>"
+    )
+
+    if settings.RESEND_API_KEY:
+        await _send_via_resend(to, subject, text, html)
+        return
+
     if settings.SMTP_HOST:
-        # TODO: implement smtplib send. Keeping it stub'd so dev works out of the box.
-        pass
-    print(f"[DEV-OTP] verification code for {to}: {code}")
+        import asyncio
+
+        await asyncio.to_thread(_send_via_smtp, to, subject, text, html)
+        return
+
+    logger.warning("[DEV-OTP] verification code for %s: %s", to, code)

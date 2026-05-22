@@ -1,15 +1,11 @@
-"""
-Cursor generates the bulk of this file (Pydantic BaseSettings pulling DATABASE_URL,
-REDIS_URL, JWT_*, SMTP_*, etc).
+from pathlib import Path
 
-The non-obvious bit is `ALLOWED_EMAIL_DOMAINS` — it needs to be a dict, not a list,
-because we want each domain to carry uni name + country metadata. Loaded from a JSON
-env var or a YAML file shipped with the repo.
-"""
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 import json
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -28,6 +24,14 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM: str = "noreply@campusvoice.app"
 
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM: str | None = None  # defaults to SMTP_FROM when unset
+
+    CORS_ORIGINS: str = "http://localhost:3000"
+
+    SEVERE_TERMS_PATH: str | None = None
+    SEVERE_TERMS_JSON: str = "[]"
+
     # Pass as a JSON string in env:
     # ALLOWED_EMAIL_DOMAINS='{"srh-hochschule-berlin.de": {"name": "SRH Berlin", "country": "DE", "city": "Berlin"}}'
     ALLOWED_EMAIL_DOMAINS_JSON: str = Field(default="{}", alias="ALLOWED_EMAIL_DOMAINS")
@@ -38,6 +42,20 @@ class Settings(BaseSettings):
             return json.loads(self.ALLOWED_EMAIL_DOMAINS_JSON)
         except json.JSONDecodeError:
             return {}
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def resend_from(self) -> str:
+        return self.RESEND_FROM or self.SMTP_FROM
+
+    @property
+    def severe_terms_path(self) -> Path:
+        if self.SEVERE_TERMS_PATH:
+            return Path(self.SEVERE_TERMS_PATH)
+        return _BACKEND_ROOT / "severe_terms.txt"
 
 
 settings = Settings()  # type: ignore[call-arg]

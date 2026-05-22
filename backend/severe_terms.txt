@@ -1,0 +1,14 @@
+# Substring-matched (lowercase). One term per line. Add slurs via env SEVERE_TERMS_JSON in production.
+kill yourself
+kys
+kill urself
+i will kill you
+i'll kill you
+going to kill you
+rape you
+school shooter
+shoot up the school
+bomb the school
+bomb threat
+die in a fire
+hope you die
