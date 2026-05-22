@@ -1,37 +1,37 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.Python
-.venv/
-venv/
-.env
-*.egg-info/
-.eggs/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Node
+# Dependencies
 node_modules/
-.next/
-out/
-.turbo/
-*.tsbuildinfo
-.npm/
+frontend/node_modules/
+backend/node_modules/
 
-# Env
+# Env files
+.env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
 
-# OS / IDE
+# Build output
+.next/
+frontend/.next/
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# macOS
 .DS_Store
-.idea/
-.vscode/
 
-# Coverage
-htmlcov/
-.coverage
-coverage.xml
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
