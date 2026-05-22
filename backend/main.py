@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+from app.services.university_email import load_disposable_domains
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api import (
+    admin_domains_router,
     admin_reports_router,
     auth_router,
     comments_router,
@@ -20,6 +23,7 @@ from app.middleware.profanity import ProfanityGuardMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await load_disposable_domains()
     yield
 
 
@@ -43,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(universities_router)
     app.include_router(reports_router)
     app.include_router(admin_reports_router)
+    app.include_router(admin_domains_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

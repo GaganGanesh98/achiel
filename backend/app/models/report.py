@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 
 class ReportTargetType(str, PyEnum):
@@ -31,7 +31,7 @@ class ReportStatus(str, PyEnum):
     DISMISSED = "dismissed"
 
 
-class ModerationReport(Base):
+class ModerationReport(TimestampMixin, Base):
     __tablename__ = "moderation_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(

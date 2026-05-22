@@ -50,7 +50,8 @@ function VerifyPendingContent() {
           <h1 className="text-2xl font-semibold">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a verification link to <strong className="text-foreground">{email}</strong>.
-            Click it to activate your account.
+            Click it to confirm your email. If your university domain is new to us, we&apos;ll
+            review it within 24 hours and email you when you can log in.
           </p>
 
           <Button

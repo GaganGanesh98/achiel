@@ -11,7 +11,12 @@ export type Sentiment = "positive" | "neutral" | "negative";
 
 export type PostStatus = "published" | "flagged" | "removed";
 
-export type VerificationStatus = "pending" | "verified" | "rejected";
+export type VerificationStatus =
+  | "PENDING"
+  | "verified_pending"
+  | "awaiting_domain_review"
+  | "VERIFIED"
+  | "REJECTED";
 
 export interface University {
   id: string;

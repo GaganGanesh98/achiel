@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 
 class Topic(str, PyEnum):
@@ -41,7 +41,7 @@ class PostStatus(str, PyEnum):
     REMOVED = "removed"
 
 
-class Post(Base):
+class Post(TimestampMixin, Base):
     __tablename__ = "posts"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -83,7 +83,7 @@ class Post(Base):
     )
 
 
-class PostVote(Base):
+class PostVote(TimestampMixin, Base):
     __tablename__ = "post_votes"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -107,7 +107,7 @@ class PostVote(Base):
     )
 
 
-class Comment(Base):
+class Comment(TimestampMixin, Base):
     __tablename__ = "comments"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -144,7 +144,7 @@ class Comment(Base):
     votes = relationship("CommentVote", back_populates="comment", cascade="all, delete-orphan")
 
 
-class CommentVote(Base):
+class CommentVote(TimestampMixin, Base):
     __tablename__ = "comment_votes"
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -73,11 +73,16 @@ export default function MePage() {
 
   if (!user) return null;
 
-  const statusLabel = user.is_verified
-    ? "Verified"
-    : user.verification_status === "rejected"
+  const statusLabel =
+    user.verification_status === "REJECTED"
       ? "Rejected"
-      : "Pending email verification";
+      : user.verification_status === "awaiting_domain_review"
+        ? "Domain under review"
+        : user.verification_status === "VERIFIED"
+          ? "Verified"
+          : user.is_verified
+            ? "Verified"
+            : "Pending email verification";
 
   return (
     <main className="mx-auto max-w-md py-12 px-4 space-y-6">

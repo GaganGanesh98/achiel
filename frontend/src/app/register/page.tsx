@@ -42,8 +42,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [domainPreview, setDomainPreview] = useState<{
     university: string | null;
-    allowed: boolean | null;
-  }>({ university: null, allowed: null });
+    status: "allowed" | "pending" | "rejected" | null;
+    message: string | null;
+  }>({ university: null, status: null, message: null });
   const [lookupLoading, setLookupLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -73,21 +74,26 @@ export default function RegisterPage() {
   const lookupDomain = useCallback(async (email: string) => {
     const domain = extractEmailDomain(email);
     if (!domain || domain.length < 2) {
-      setDomainPreview({ university: null, allowed: null });
+      setDomainPreview({ university: null, status: null, message: null });
       return;
     }
     setLookupLoading(true);
     try {
-      const res = await api<{ university: string | null }>("/universities/lookup", {
+      const res = await api<{
+        university: string | null;
+        status?: "allowed" | "pending" | "rejected" | null;
+        message?: string | null;
+      }>("/universities/lookup", {
         query: { domain },
         auth: false,
       });
       setDomainPreview({
         university: res.university,
-        allowed: res.university !== null,
+        status: res.status ?? null,
+        message: res.message ?? null,
       });
     } catch {
-      setDomainPreview({ university: null, allowed: null });
+      setDomainPreview({ university: null, status: null, message: null });
     } finally {
       setLookupLoading(false);
     }
@@ -166,14 +172,21 @@ export default function RegisterPage() {
                 {lookupLoading && (
                   <p className="text-xs text-muted-foreground">Checking domain…</p>
                 )}
-                {!lookupLoading && domainPreview.allowed === true && domainPreview.university && (
+                {!lookupLoading && domainPreview.status === "allowed" && (
                   <p className="text-xs rounded-md border border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300 px-2 py-1.5">
-                    ✓ {domainPreview.university}
+                    ✓ {domainPreview.university ?? "Recognised university domain"}
                   </p>
                 )}
-                {!lookupLoading && domainPreview.allowed === false && emailValue?.includes("@") && (
+                {!lookupLoading && domainPreview.status === "pending" && emailValue?.includes("@") && (
                   <p className="text-xs rounded-md border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200 px-2 py-1.5">
-                    Domain not recognised — your email must be on our allowlist.
+                    {domainPreview.message ??
+                      "We don't recognise this domain yet — we'll review it within 24 hours and email you when your account is active."}
+                  </p>
+                )}
+                {!lookupLoading && domainPreview.status === "rejected" && emailValue?.includes("@") && (
+                  <p className="text-xs rounded-md border border-destructive/30 bg-destructive/10 text-destructive px-2 py-1.5">
+                    {domainPreview.message ??
+                      "Email domain not allowed. We only accept verified university emails."}
                   </p>
                 )}
               </div>

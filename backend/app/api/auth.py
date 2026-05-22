@@ -14,6 +14,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import User, VerificationStatus
+from app.services import university_email as uni_email
 from app.schemas.auth import (
     MessageResponse,
     RegisterResponse,
@@ -34,11 +35,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _domain_not_allowed() -> HTTPException:
-    return HTTPException(
-        status.HTTP_422_UNPROCESSABLE_ENTITY,
-        "Email domain not allowed. We only accept verified university emails.",
-    )
+DOMAIN_REJECTED_MESSAGE = (
+    "Email domain not allowed. We only accept verified university emails."
+)
+
+
+def _domain_rejected() -> HTTPException:
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, DOMAIN_REJECTED_MESSAGE)
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -59,19 +62,27 @@ async def register(
     if existing.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
 
-    domain = verif.extract_domain(email)
-    if domain not in settings.ALLOWED_EMAIL_DOMAINS:
-        raise _domain_not_allowed()
+    validation = await uni_email.validate_university_email(
+        db,
+        email,
+        country_hint=payload.country.upper(),
+    )
+    if validation.status == "rejected":
+        raise _domain_rejected()
 
     university_name = lookup_university(email)
     university_id = None
-    try:
-        uni = await verif.get_or_reject_university(db, email)
-        university_id = uni.id
-        if not university_name:
-            university_name = uni.name
-    except verif.DomainNotAllowed:
-        raise _domain_not_allowed()
+    if validation.status == "allowed":
+        try:
+            uni = await verif.get_or_reject_university(db, email)
+            university_id = uni.id
+            if not university_name:
+                university_name = uni.name
+        except verif.DomainNotAllowed:
+            raise _domain_rejected()
+        account_status = VerificationStatus.VERIFIED_PENDING
+    else:
+        account_status = VerificationStatus.AWAITING_DOMAIN_REVIEW
 
     user = User(
         email=email,
@@ -82,13 +93,14 @@ async def register(
         program=payload.program,
         year_of_study=payload.year_of_study,
         university_id=university_id,
-        verification_status=VerificationStatus.PENDING,
+        verification_status=account_status,
         is_verified=False,
     )
 
     if settings.DEV_AUTO_VERIFY:
         user.is_verified = True
-        user.verification_status = VerificationStatus.VERIFIED
+        if account_status != VerificationStatus.AWAITING_DOMAIN_REVIEW:
+            user.verification_status = VerificationStatus.VERIFIED
         logger.info("[DEV] Auto-verified user %s", email)
     else:
         token = email_verif.assign_verification_token(user)
@@ -164,6 +176,16 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Your email isn't verified yet. Check your inbox or resend the verification link.",
+        )
+    if user.verification_status == VerificationStatus.AWAITING_DOMAIN_REVIEW:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Your university domain is under review. We'll email you when your account is active.",
+        )
+    if user.verification_status != VerificationStatus.VERIFIED:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Your account is not fully active yet.",
         )
 
     token = create_access_token(subject=str(user.id))

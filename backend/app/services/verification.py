@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models import University, User, VerificationStatus
+from app.models.domain import AllowedDomain
+from app.services.university_email import extract_domain as email_extract_domain
 
 logger = logging.getLogger(__name__)
 
@@ -39,27 +41,36 @@ class InvalidOTP(Exception):
 
 
 def extract_domain(email: str) -> str:
-    return email.split("@", 1)[1].lower().strip()
+    return email_extract_domain(email)
+
+
+async def _domain_is_allowed(db: AsyncSession, domain: str) -> bool:
+    result = await db.execute(
+        select(AllowedDomain.domain).where(AllowedDomain.domain == domain)
+    )
+    if result.scalar_one_or_none() is not None:
+        return True
+    return domain in settings.ALLOWED_EMAIL_DOMAINS
 
 
 async def get_or_reject_university(db: AsyncSession, email: str) -> University:
     """Returns the University row for this email's domain, or raises."""
     domain = extract_domain(email)
 
-    meta = settings.ALLOWED_EMAIL_DOMAINS.get(domain)
-    if not meta:
+    if not await _domain_is_allowed(db, domain):
         raise DomainNotAllowed(
             f"'{domain}' is not a recognised university domain. "
             f"Contact support if your institution should be added."
         )
 
+    meta = settings.ALLOWED_EMAIL_DOMAINS.get(domain, {})
     result = await db.execute(select(University).where(University.domain == domain))
     uni = result.scalar_one_or_none()
     if uni is None:
         uni = University(
             domain=domain,
-            name=meta["name"],
-            country=meta["country"],
+            name=meta.get("name") or domain,
+            country=meta.get("country") or "XX",
             city=meta.get("city"),
         )
         db.add(uni)

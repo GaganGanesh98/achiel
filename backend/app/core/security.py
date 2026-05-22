@@ -16,7 +16,7 @@ from app.core._security_base import (
     hash_password,
     verify_password,
 )
-from app.models import User
+from app.models import User, VerificationStatus
 
 get_current_user_required = get_current_user_strict
 
@@ -32,6 +32,11 @@ async def require_verified(user: User = Depends(get_current_user_strict)) -> Use
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Please verify your email before posting",
+        )
+    if user.verification_status != VerificationStatus.VERIFIED:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Your university domain is under review. We'll email you when you can post.",
         )
     return user
 

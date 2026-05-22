@@ -97,9 +97,14 @@ export function AppHeader() {
                   <Link href="/me">My account</Link>
                 </DropdownMenuItem>
                 {user.is_admin && (
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin/reports">Admin</Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/reports">Reports</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/domains">Domains</Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuItem onClick={logout}>Log out</DropdownMenuItem>
               </DropdownMenuContent>

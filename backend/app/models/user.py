@@ -6,16 +6,19 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
+from app.models.domain import _enum_values
 
 
 class VerificationStatus(str, PyEnum):
-    PENDING = "pending"
-    VERIFIED = "verified"
-    REJECTED = "rejected"
+    PENDING = "PENDING"
+    VERIFIED_PENDING = "verified_pending"
+    AWAITING_DOMAIN_REVIEW = "awaiting_domain_review"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
 
 
-class User(Base):
+class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -44,7 +47,11 @@ class User(Base):
     )
 
     verification_status: Mapped[VerificationStatus] = mapped_column(
-        Enum(VerificationStatus, name="verification_status"),
+        Enum(
+            VerificationStatus,
+            name="verification_status",
+            values_callable=_enum_values,
+        ),
         default=VerificationStatus.PENDING,
         nullable=False,
     )

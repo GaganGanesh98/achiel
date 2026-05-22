@@ -43,10 +43,11 @@ def log_verification_link(email: str, token: str) -> None:
 
 
 async def mark_user_verified(db: AsyncSession, user: User) -> User:
-    user.is_verified = True
-    user.verification_status = VerificationStatus.VERIFIED
     user.verification_token = None
     user.verification_token_expires_at = None
+    user.is_verified = True
+    if user.verification_status != VerificationStatus.AWAITING_DOMAIN_REVIEW:
+        user.verification_status = VerificationStatus.VERIFIED
     await db.flush()
     return user
 
