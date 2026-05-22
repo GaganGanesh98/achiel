@@ -1,15 +1,30 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_db
-from app.models import University, Post, PostStatus
-from app.schemas.auth import UniversityOut
-
+from app.models import Post, PostStatus, University
+from app.schemas.auth import UniversityLookupResponse, UniversityOut
+from app.services.universities import lookup_university
 
 router = APIRouter(prefix="/universities", tags=["universities"])
+
+
+@router.get("/lookup", response_model=UniversityLookupResponse)
+async def lookup_by_domain(
+    domain: str = Query(..., min_length=2, max_length=100),
+) -> UniversityLookupResponse:
+    domain = domain.lower().strip()
+    name = lookup_university(f"preview@{domain}")
+    if name:
+        return UniversityLookupResponse(university=name)
+    if domain in settings.ALLOWED_EMAIL_DOMAINS:
+        meta = settings.ALLOWED_EMAIL_DOMAINS[domain]
+        return UniversityLookupResponse(university=meta.get("name"))
+    return UniversityLookupResponse(university=None)
 
 
 @router.get("", response_model=list[UniversityOut])

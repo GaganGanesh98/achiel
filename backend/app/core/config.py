@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
+    FRONTEND_URL: str = "http://localhost:3000"
+    DEV_AUTO_VERIFY: bool = False
+    EMAIL_SENDER: str | None = None
+
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None
@@ -25,15 +29,13 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "noreply@campusvoice.app"
 
     RESEND_API_KEY: str | None = None
-    RESEND_FROM: str | None = None  # defaults to SMTP_FROM when unset
+    RESEND_FROM: str | None = None
 
     CORS_ORIGINS: str = "http://localhost:3000"
 
     SEVERE_TERMS_PATH: str | None = None
     SEVERE_TERMS_JSON: str = "[]"
 
-    # Pass as a JSON string in env:
-    # ALLOWED_EMAIL_DOMAINS='{"srh-hochschule-berlin.de": {"name": "SRH Berlin", "country": "DE", "city": "Berlin"}}'
     ALLOWED_EMAIL_DOMAINS_JSON: str = Field(default="{}", alias="ALLOWED_EMAIL_DOMAINS")
 
     @property
@@ -49,7 +51,7 @@ class Settings(BaseSettings):
 
     @property
     def resend_from(self) -> str:
-        return self.RESEND_FROM or self.SMTP_FROM
+        return self.RESEND_FROM or self.SMTP_FROM or self.EMAIL_SENDER or self.SMTP_FROM
 
     @property
     def severe_terms_path(self) -> Path:

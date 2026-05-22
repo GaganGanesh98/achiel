@@ -1,11 +1,15 @@
 from app.schemas.auth import (
+    MessageResponse,
+    RegisterResponse,
+    ResendVerificationRequest,
     Token,
+    UniversityLookupResponse,
     UserLogin,
     UserOut,
     UserRegister,
     UserUpdate,
     UniversityOut,
-    VerifyEmailRequest,
+    VerifyTokenRequest,
 )
 from app.schemas.content import (
     AuthorOut,
@@ -14,24 +18,26 @@ from app.schemas.content import (
     PostCreate,
     PostFeedQuery,
     PostOut,
-    ReportCreate,
     VoteIn,
 )
 
 __all__ = [
+    "MessageResponse",
+    "RegisterResponse",
+    "ResendVerificationRequest",
     "Token",
+    "UniversityLookupResponse",
     "UserLogin",
     "UserOut",
     "UserRegister",
     "UserUpdate",
     "UniversityOut",
-    "VerifyEmailRequest",
+    "VerifyTokenRequest",
     "AuthorOut",
     "CommentCreate",
     "CommentOut",
     "PostCreate",
     "PostFeedQuery",
     "PostOut",
-    "ReportCreate",
     "VoteIn",
 ]

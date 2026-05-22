@@ -5,7 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import auth_router, posts_router, universities_router
+from app.api import (
+    admin_reports_router,
+    auth_router,
+    comments_router,
+    posts_router,
+    reports_router,
+    universities_router,
+)
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.middleware.profanity import ProfanityGuardMiddleware
@@ -32,7 +39,10 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(posts_router)
+    app.include_router(comments_router)
     app.include_router(universities_router)
+    app.include_router(reports_router)
+    app.include_router(admin_reports_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -16,7 +16,7 @@ from app.core._security_base import (
     hash_password,
     verify_password,
 )
-from app.models import User, VerificationStatus
+from app.models import User
 
 get_current_user_required = get_current_user_strict
 
@@ -28,11 +28,17 @@ async def get_current_user(
 
 
 async def require_verified(user: User = Depends(get_current_user_strict)) -> User:
-    if user.verification_status != VerificationStatus.VERIFIED:
+    if not user.is_verified:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            "Email verification required before posting",
+            "Please verify your email before posting",
         )
+    return user
+
+
+async def require_admin(user: User = Depends(get_current_user_strict)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
     return user
 
 
@@ -44,4 +50,5 @@ __all__ = [
     "get_current_user",
     "get_current_user_required",
     "require_verified",
+    "require_admin",
 ]

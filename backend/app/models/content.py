@@ -1,6 +1,18 @@
 import uuid
 from enum import Enum as PyEnum
-from sqlalchemy import String, Text, ForeignKey, Enum, Integer, UniqueConstraint, Index
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,10 +29,16 @@ class Topic(str, PyEnum):
     GENERAL = "general"
 
 
+class Sentiment(str, PyEnum):
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+
+
 class PostStatus(str, PyEnum):
     PUBLISHED = "published"
-    FLAGGED = "flagged"     # caught by moderation, awaiting review
-    REMOVED = "removed"     # soft-deleted by mod or author
+    FLAGGED = "flagged"
+    REMOVED = "removed"
 
 
 class Post(Base):
@@ -32,6 +50,9 @@ class Post(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     topic: Mapped[Topic] = mapped_column(Enum(Topic, name="topic"), nullable=False, index=True)
+    sentiment: Mapped[Sentiment] = mapped_column(
+        Enum(Sentiment, name="sentiment"), nullable=False, index=True
+    )
     status: Mapped[PostStatus] = mapped_column(
         Enum(PostStatus, name="post_status"), default=PostStatus.PUBLISHED, nullable=False
     )
@@ -41,23 +62,48 @@ class Post(Base):
     )
     author = relationship("User", back_populates="posts")
 
-    # Denormalised so feeds can filter by uni without a join
     university_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("universities.id"), nullable=True, index=True
     )
     university = relationship("University", back_populates="posts")
 
-    # Cached counters — updated on vote/comment create. Cheap and avoids COUNT(*) in feed.
     score: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    upvotes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    downvotes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     comment_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hidden_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
-    votes = relationship("Vote", back_populates="post", cascade="all, delete-orphan")
-    reports = relationship("Report", back_populates="post", cascade="all, delete-orphan")
+    votes = relationship("PostVote", back_populates="post", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_posts_topic_created", "topic", "created_at"),
         Index("ix_posts_status_created", "status", "created_at"),
+    )
+
+
+class PostVote(Base):
+    __tablename__ = "post_votes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    value: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    user = relationship("User", back_populates="post_votes")
+
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    post = relationship("Post", back_populates="votes")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="uq_post_vote_user_post"),
+        CheckConstraint("value IN (-1, 1)", name="ck_post_vote_value"),
     )
 
 
@@ -67,66 +113,61 @@ class Comment(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    body: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[PostStatus] = mapped_column(
-        Enum(PostStatus, name="post_status", create_type=False),
-        default=PostStatus.PUBLISHED,
-        nullable=False,
-    )
+    body: Mapped[str] = mapped_column(String(2000), nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     post_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True
     )
     post = relationship("Post", back_populates="comments")
 
+    parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    parent = relationship("Comment", remote_side="Comment.id", back_populates="replies")
+    replies = relationship("Comment", back_populates="parent", cascade="all, delete-orphan")
+
     author_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     author = relationship("User", back_populates="comments")
 
+    score: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    upvotes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    downvotes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hidden_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-class VoteValue(int, PyEnum):
-    UP = 1
-    DOWN = -1
+    votes = relationship("CommentVote", back_populates="comment", cascade="all, delete-orphan")
 
 
-class Vote(Base):
-    __tablename__ = "votes"
+class CommentVote(Base):
+    __tablename__ = "comment_votes"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    value: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 or -1
+    value: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    user = relationship("User", back_populates="votes")
+    user = relationship("User", back_populates="comment_votes")
 
-    post_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False
+    comment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    post = relationship("Post", back_populates="votes")
+    comment = relationship("Comment", back_populates="votes")
 
     __table_args__ = (
-        UniqueConstraint("user_id", "post_id", name="uq_vote_user_post"),
+        UniqueConstraint("user_id", "comment_id", name="uq_comment_vote_user_comment"),
+        CheckConstraint("value IN (-1, 1)", name="ck_comment_vote_value"),
     )
 
 
-class Report(Base):
-    __tablename__ = "reports"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    reason: Mapped[str] = mapped_column(String(500), nullable=False)
-    resolved: Mapped[bool] = mapped_column(default=False, nullable=False)
-
-    post_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False
-    )
-    post = relationship("Post", back_populates="reports")
-
-    reporter_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )

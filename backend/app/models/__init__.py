@@ -4,11 +4,17 @@ from app.models.university import University
 from app.models.content import (
     Post,
     Comment,
-    Vote,
-    Report,
+    PostVote,
+    CommentVote,
     Topic,
+    Sentiment,
     PostStatus,
-    VoteValue,
+)
+from app.models.report import (
+    ModerationReport,
+    ReportTargetType,
+    ReportReason,
+    ReportStatus,
 )
 
 __all__ = [
@@ -18,9 +24,13 @@ __all__ = [
     "University",
     "Post",
     "Comment",
-    "Vote",
-    "Report",
+    "PostVote",
+    "CommentVote",
     "Topic",
+    "Sentiment",
     "PostStatus",
-    "VoteValue",
+    "ModerationReport",
+    "ReportTargetType",
+    "ReportReason",
+    "ReportStatus",
 ]

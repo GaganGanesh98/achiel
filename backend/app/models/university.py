@@ -17,5 +17,5 @@ class University(Base):
     country: Mapped[str] = mapped_column(String(2), nullable=False)  # ISO-3166-1 alpha-2
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    users = relationship("User", back_populates="university")
+    users = relationship("User", back_populates="university_link")
     posts = relationship("Post", back_populates="university")

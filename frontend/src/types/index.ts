@@ -7,6 +7,8 @@ export type Topic =
   | "jobs"
   | "general";
 
+export type Sentiment = "positive" | "neutral" | "negative";
+
 export type PostStatus = "published" | "flagged" | "removed";
 
 export type VerificationStatus = "pending" | "verified" | "rejected";
@@ -23,10 +25,29 @@ export interface User {
   id: string;
   email: string;
   display_name: string;
-  country: string | null;
+  country: string;
+  university: string | null;
+  program: string | null;
+  year_of_study: string | null;
+  is_verified: boolean;
+  is_admin?: boolean;
   verification_status: VerificationStatus;
-  university: University | null;
+  university_link?: University | null;
   created_at: string;
+}
+
+export interface WatchlistMatch {
+  name: string;
+  university_domain?: string | null;
+  role?: string | null;
+}
+
+export interface RegisterResponse {
+  id: string;
+  email: string;
+  is_verified: boolean;
+  next: string;
+  access_token?: string | null;
 }
 
 export interface Author {
@@ -40,21 +61,45 @@ export interface Post {
   title: string;
   body: string;
   topic: Topic;
+  sentiment: Sentiment;
   status: PostStatus;
   score: number;
+  upvotes: number;
+  downvotes: number;
   comment_count: number;
   author: Author;
   university: University | null;
   created_at: string;
-  user_vote: number | null;
+  my_vote: number;
+  /** @deprecated use my_vote */
+  user_vote?: number | null;
+  is_hidden?: boolean;
+  hidden_reason?: string | null;
+  watchlist_matches?: WatchlistMatch[] | null;
 }
 
 export interface Comment {
   id: string;
   body: string;
-  status: PostStatus;
+  post_id: string;
+  parent_comment_id: string | null;
+  is_deleted: boolean;
+  score: number;
+  upvotes: number;
+  downvotes: number;
   author: Author;
   created_at: string;
+  my_vote: number;
+  is_hidden?: boolean;
+  hidden_reason?: string | null;
+  watchlist_matches?: WatchlistMatch[] | null;
+}
+
+export interface VoteCounts {
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  my_vote: number;
 }
 
 export interface AuthToken {
@@ -70,4 +115,10 @@ export const TOPIC_LABELS: Record<Topic, string> = {
   housing: "Housing",
   jobs: "Jobs",
   general: "General",
+};
+
+export const SENTIMENT_LABELS: Record<Sentiment, string> = {
+  positive: "Positive",
+  neutral: "Neutral",
+  negative: "Negative",
 };

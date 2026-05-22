@@ -89,7 +89,10 @@ async def consume_otp(redis: Redis, email: str, code: str) -> None:
 
 
 async def mark_verified(db: AsyncSession, user: User) -> User:
+    user.is_verified = True
     user.verification_status = VerificationStatus.VERIFIED
+    user.verification_token = None
+    user.verification_token_expires_at = None
     await db.flush()
     return user
 

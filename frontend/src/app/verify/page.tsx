@@ -1,68 +1,85 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { api, ApiError } from "@/lib/api";
-import type { User } from "@/types";
 
-function VerifyForm() {
-  const router = useRouter();
+function VerifyContent() {
   const params = useSearchParams();
-  const email = params.get("email") ?? "";
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const token = params.get("token") ?? "";
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    token ? "loading" : "error"
+  );
+  const [message, setMessage] = useState(
+    token ? "" : "Missing verification token. Use the link from your email."
+  );
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const token = String(new FormData(e.currentTarget).get("token"));
-    try {
-      await api<User>(`/auth/verify?email=${encodeURIComponent(email)}`, {
-        method: "POST",
-        body: { token },
-        auth: false,
-      });
-      router.push("/login");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Verification failed");
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    if (!token) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await api("/auth/verify", {
+          method: "POST",
+          auth: false,
+          body: { token },
+        });
+        if (cancelled) return;
+        setStatus("success");
+        setMessage("Your account is verified. Redirecting…");
+        setTimeout(() => router.push("/login"), 2000);
+      } catch (err) {
+        if (cancelled) return;
+        setStatus("error");
+        setMessage(
+          err instanceof ApiError ? err.message : "Verification failed. Try again."
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, router]);
 
   return (
-    <main className="mx-auto max-w-md py-12 px-4">
-      <h1 className="text-2xl font-semibold mb-2">Verify your email</h1>
-      <p className="text-sm text-neutral-500 mb-6">
-        We sent a 6-digit code to <strong>{email}</strong>. Check your inbox (and dev console in development).
-      </p>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <input
-          name="token"
-          required
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-          maxLength={6}
-          placeholder="6-digit code"
-          className="w-full rounded border px-3 py-2 tracking-widest text-center text-lg"
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          disabled={loading}
-          className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
-        >
-          {loading ? "Verifying…" : "Verify"}
-        </button>
-      </form>
+    <main className="mx-auto max-w-md py-16 px-4">
+      <Card>
+        <CardContent className="pt-8 pb-6 text-center space-y-4">
+          {status === "loading" && (
+            <>
+              <p className="text-sm text-muted-foreground">Verifying your account…</p>
+              <div className="h-8 w-8 mx-auto border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </>
+          )}
+          {status === "success" && (
+            <p className="text-sm text-green-700 dark:text-green-400">{message}</p>
+          )}
+          {status === "error" && (
+            <>
+              <p className="text-sm text-destructive">{message}</p>
+              <Button asChild variant="outline">
+                <Link href="/verify-pending">Request a new link</Link>
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
 
 export default function VerifyPage() {
   return (
-    <Suspense>
-      <VerifyForm />
+    <Suspense fallback={<main className="p-8 text-sm text-muted-foreground">Loading…</main>}>
+      <VerifyContent />
     </Suspense>
   );
 }
