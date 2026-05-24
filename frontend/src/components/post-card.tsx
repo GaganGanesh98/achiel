@@ -140,7 +140,8 @@ export function PostCard({
             </Badge>
             {uni && (
               <span>
-                {uni.name} · {uni.country}
+                {uni.name}
+                {uni.city ? ` · ${uni.city}` : ""}
               </span>
             )}
             <span className="ml-auto">{timeAgo(post.created_at)}</span>

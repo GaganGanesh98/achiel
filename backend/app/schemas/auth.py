@@ -3,14 +3,26 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.core._security_base import truncate_password_for_bcrypt
 from app.models.user import VerificationStatus
+
+
+def _truncate_password(v: str) -> str:
+    return truncate_password_for_bcrypt(v)
 
 
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=2, max_length=60)
-    country: str = Field(min_length=2, max_length=2)
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def truncate_password(cls, v: object) -> object:
+        if isinstance(v, str):
+            return _truncate_password(v)
+        return v
+    country: str = Field(default="DE", min_length=2, max_length=2)
     program: str | None = Field(default=None, max_length=255)
     year_of_study: str | None = Field(default=None, max_length=20)
     privacy_consent: bool
@@ -45,7 +57,14 @@ class RegisterResponse(BaseModel):
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def truncate_password(cls, v: object) -> object:
+        if isinstance(v, str):
+            return _truncate_password(v)
+        return v
 
 
 class Token(BaseModel):
@@ -57,8 +76,12 @@ class UniversityOut(BaseModel):
     id: UUID
     name: str
     domain: str
-    country: str
     city: str | None
+    short_name: str | None = None
+    state: str | None = None
+    type: str | None = None
+    website: str | None = None
+    verified_student_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -72,6 +95,7 @@ class UserOut(BaseModel):
     program: str | None
     year_of_study: str | None
     is_verified: bool
+    email_confirmed_at: datetime | None = None
     is_admin: bool = False
     verification_status: VerificationStatus
     university_link: UniversityOut | None = Field(
@@ -108,6 +132,38 @@ class ResendVerificationRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=255)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password", mode="before")
+    @classmethod
+    def truncate_new_password(cls, v: object) -> object:
+        if isinstance(v, str):
+            return _truncate_password(v)
+        return v
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("current_password", "new_password", mode="before")
+    @classmethod
+    def truncate_passwords(cls, v: object) -> object:
+        if isinstance(v, str):
+            return _truncate_password(v)
+        return v
+
+
+class ConfirmEmailRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=255)
 
 
 class UniversityLookupResponse(BaseModel):

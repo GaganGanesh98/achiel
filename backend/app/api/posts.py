@@ -38,7 +38,6 @@ def parse_topic(topic: str | None) -> Topic | None:
 async def list_feed(
     topic: str | None = None,
     university_id: UUID | None = None,
-    country: str | None = Query(default=None, min_length=2, max_length=2),
     sort: str = Query(default="new", pattern="^(new|top)$"),
     cursor: datetime | None = None,
     limit: int = Query(default=20, ge=1, le=50),
@@ -61,12 +60,6 @@ async def list_feed(
         stmt = stmt.where(Post.topic == topic_enum)
     if university_id:
         stmt = stmt.where(Post.university_id == university_id)
-    if country:
-        from app.models import University as Uni
-
-        stmt = stmt.join(Uni, Post.university_id == Uni.id).where(
-            Uni.country == country.upper()
-        )
 
     if sort == "new":
         if cursor:

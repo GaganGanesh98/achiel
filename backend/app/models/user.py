@@ -38,6 +38,10 @@ class User(TimestampMixin, Base):
     )
     university_link = relationship("University", back_populates="users")
 
+    email_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verification_token: Mapped[str | None] = mapped_column(
         String(255), unique=True, nullable=True, index=True

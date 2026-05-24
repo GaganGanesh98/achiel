@@ -8,10 +8,10 @@ export type NewsItem = {
   contentSnippet?: string;
 };
 
-const parser = new Parser({
-  timeout: 8000,
-  headers: { "User-Agent": "CampusVoice/1.0 (+https://campusvoice.local)" },
-});
+const parser = new Parser();
+
+const USER_AGENT = "CampusVoice/1.0 (+https://campusvoice.local)";
+const FETCH_TIMEOUT_MS = 8000;
 
 const FEEDS: { url: string; source: string }[] = [
   {
@@ -29,8 +29,20 @@ const FEEDS: { url: string; source: string }[] = [
 ];
 
 async function fetchFeed(url: string, source: string): Promise<NewsItem[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const feed = await parser.parseURL(url);
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/rss+xml, application/xml, text/xml" },
+      signal: controller.signal,
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+
+    const xml = await res.text();
+    const feed = await parser.parseString(xml);
+
     return (feed.items ?? []).map((item) => ({
       title: item.title?.trim() ?? "Untitled",
       link: item.link ?? item.guid ?? "",
@@ -40,6 +52,8 @@ async function fetchFeed(url: string, source: string): Promise<NewsItem[]> {
     }));
   } catch {
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

@@ -2,14 +2,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { GraduationCap, MessageSquare, MessageSquarePlus, Users } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { Composer } from "@/components/composer";
 import { PostCard } from "@/components/post-card";
+import { TypeBadge } from "@/components/type-badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { api, ApiError } from "@/lib/api";
-import type { Post, Topic } from "@/types";
+import { t } from "@/lib/i18n";
+import type { Post, Topic, University } from "@/types";
 import { TOPIC_LABELS } from "@/types";
 
 const TOPICS: (Topic | "all")[] = [
@@ -22,11 +26,6 @@ const TOPICS: (Topic | "all")[] = [
   "jobs",
   "general",
 ];
-
-// TODO: fetch from GET /api/posts/trending?window=7d → { topic: string; post_count: number }[]
-// Section is hidden until real data is available.
-// const { data: trending } = useQuery({ queryKey: ["trending"], queryFn: () => api<...>(...) });
-// {trending && trending.length > 0 && ( <TrendingSection ... /> )}
 
 async function fetchStat(path: string): Promise<number | null> {
   try {
@@ -43,7 +42,7 @@ export default function DashboardPage() {
     <Suspense
       fallback={
         <main className="mx-auto max-w-3xl py-6 px-4">
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("universities.loading")}</p>
         </main>
       }
     >
@@ -58,21 +57,25 @@ function DashboardContent() {
   const [topic, setTopic] = useState<Topic | "all">("all");
   const [sort, setSort] = useState<"new" | "top">("new");
 
-  // TODO: GET /stats/users → { count: number }
+  const { data: university } = useQuery({
+    queryKey: ["university", universityId],
+    queryFn: () =>
+      api<University>(`/universities/${universityId}`, { auth: false }),
+    enabled: !!universityId,
+  });
+
   const { data: verifiedStudents } = useQuery({
     queryKey: ["stats", "users"],
     queryFn: () => fetchStat("/stats/users"),
     staleTime: 60_000,
   });
 
-  // TODO: GET /stats/universities → { count: number }
   const { data: activeUniversities } = useQuery({
     queryKey: ["stats", "universities"],
     queryFn: () => fetchStat("/stats/universities"),
     staleTime: 60_000,
   });
 
-  // TODO: GET /stats/posts/week → { count: number }
   const { data: postsThisWeek } = useQuery({
     queryKey: ["stats", "posts-week"],
     queryFn: () => fetchStat("/stats/posts/week"),
@@ -109,46 +112,62 @@ function DashboardContent() {
   return (
     <main className="mx-auto max-w-3xl py-6 px-4 space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Global Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Verified students from universities worldwide
-        </p>
+        <h1 className="text-2xl font-semibold">
+          {university ? university.name : t("dashboard.globalTitle")}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
       </header>
 
-      <section className="grid grid-cols-3 gap-3">
-        <StatCard
-          icon={Users}
-          label="Verified students"
-          value={verifiedStudents}
-        />
-        <StatCard
-          icon={GraduationCap}
-          label="Universities active"
-          value={activeUniversities}
-        />
-        <StatCard
-          icon={MessageSquare}
-          label="Posts this week"
-          value={postsThisWeek}
-        />
-      </section>
+      {university && (
+        <Card>
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <GraduationCap className="h-5 w-5 text-muted-foreground" />
+                <p className="font-medium">{university.name}</p>
+                {university.short_name && (
+                  <span className="text-xs text-muted-foreground">({university.short_name})</span>
+                )}
+                <TypeBadge type={university.type} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {[university.city, university.state].filter(Boolean).join(" · ")}
+                {(university.verified_student_count ?? 0) > 0
+                  ? ` · ${university.verified_student_count} ${t("universities.verifiedStudents")}`
+                  : ` · ${t("universities.beFirst")}`}
+              </p>
+            </div>
+            <Button asChild>
+              <Link href={`/register?university_id=${university.id}`}>{t("dashboard.studyHere")}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!universityId && (
+        <section className="grid grid-cols-3 gap-3">
+          <StatCard icon={Users} label="Verified students" value={verifiedStudents} />
+          <StatCard icon={GraduationCap} label="Universities active" value={activeUniversities} />
+          <StatCard icon={MessageSquare} label="Posts this week" value={postsThisWeek} />
+        </section>
+      )}
 
       <Composer onPosted={() => refetch()} />
 
       <div className="flex flex-wrap items-center gap-2 border-b pb-3">
         <div className="flex flex-wrap gap-1">
-          {TOPICS.map((t) => (
+          {TOPICS.map((tpc) => (
             <button
-              key={t}
+              key={tpc}
               type="button"
-              onClick={() => setTopic(t)}
+              onClick={() => setTopic(tpc)}
               className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                topic === t
+                topic === tpc
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background text-muted-foreground border-input hover:border-foreground/40"
               }`}
             >
-              {t === "all" ? "All" : TOPIC_LABELS[t]}
+              {tpc === "all" ? "All" : TOPIC_LABELS[tpc]}
             </button>
           ))}
         </div>
@@ -168,7 +187,7 @@ function DashboardContent() {
         </div>
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">{t("universities.loading")}</p>}
 
       {!isLoading && data?.length === 0 && (
         <Card className="border-dashed">

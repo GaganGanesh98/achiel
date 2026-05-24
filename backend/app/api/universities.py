@@ -1,26 +1,27 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.models import Post, PostStatus, University
+from app.models import Post, PostStatus, University, User
 from app.schemas.auth import UniversityOut
 from app.schemas.domains import UniversityLookupResponse
 from app.services import university_email as uni_email
+from app.services.german_catalogue import NON_GERMAN_DOMAIN_KEY
 from app.services.universities import lookup_university
 
 router = APIRouter(prefix="/universities", tags=["universities"])
 
-
 PENDING_DOMAIN_MESSAGE = (
-    "We don't recognise this domain yet — we'll review it within 24 hours and "
-    "email you when your account is active."
+    "Wir kennen diese Domain noch nicht — wir prüfen sie innerhalb von 24 Stunden "
+    "und schicken dir eine E-Mail, sobald dein Konto aktiv ist."
 )
 
 REJECTED_DOMAIN_MESSAGE = (
-    "Email domain not allowed. We only accept verified university emails."
+    "CampusVoice ist derzeit nur für Studierende an deutschen Hochschulen. "
+    "CampusVoice is currently for students at German universities only."
 )
 
 
@@ -37,10 +38,15 @@ async def lookup_by_domain(
         db, email, record_pending=False
     )
     if validation.status == "rejected":
+        message = (
+            validation.reason
+            if validation.reason == NON_GERMAN_DOMAIN_KEY
+            else REJECTED_DOMAIN_MESSAGE
+        )
         return UniversityLookupResponse(
             university=None,
             status="rejected",
-            message=REJECTED_DOMAIN_MESSAGE,
+            message=message,
         )
     if validation.status == "allowed":
         return UniversityLookupResponse(
@@ -54,19 +60,91 @@ async def lookup_by_domain(
     )
 
 
+def _active_universities_filter():
+    return University.deleted_at.is_(None), University.is_legacy.is_(False)
+
+
 @router.get("", response_model=list[UniversityOut])
 async def list_universities(
-    country: str | None = Query(default=None, min_length=2, max_length=2),
-    q: str | None = Query(default=None, min_length=2, max_length=100),
+    q: str | None = Query(default=None, min_length=1, max_length=100),
     db: AsyncSession = Depends(get_db),
-) -> list[University]:
-    stmt = select(University).order_by(University.name)
-    if country:
-        stmt = stmt.where(University.country == country.upper())
-    if q:
-        stmt = stmt.where(University.name.ilike(f"%{q}%"))
-    result = await db.execute(stmt.limit(50))
-    return list(result.scalars().all())
+) -> list[UniversityOut]:
+    active_deleted, active_legacy = _active_universities_filter()
+    verified_count = (
+        select(func.count(User.id))
+        .where(User.university_id == University.id, User.is_verified.is_(True))
+        .correlate(University)
+        .scalar_subquery()
+    )
+
+    if not q:
+        stmt = (
+            select(University, verified_count.label("verified_student_count"))
+            .where(active_deleted, active_legacy)
+            .order_by(University.name)
+            .limit(50)
+        )
+    else:
+        needle = q.lower().strip()
+        like = f"%{needle}%"
+        stmt = (
+            select(University, verified_count.label("verified_student_count"))
+            .where(
+                active_deleted,
+                active_legacy,
+                or_(
+                    func.lower(University.name).like(like),
+                    func.lower(University.short_name).like(like),
+                    func.cast(University.aliases, String).ilike(like),
+                    func.similarity(func.lower(University.name), needle) > 0.3,
+                    func.similarity(func.lower(func.coalesce(University.short_name, "")), needle)
+                    > 0.3,
+                ),
+            )
+            .order_by(
+                func.similarity(func.lower(University.name), needle).desc(),
+                University.name,
+            )
+            .limit(50)
+        )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+    out: list[UniversityOut] = []
+    for uni, count in rows:
+        item = UniversityOut.model_validate(uni)
+        item.verified_student_count = int(count or 0)
+        out.append(item)
+    return out
+
+
+@router.get("/{university_id}", response_model=UniversityOut)
+async def get_university(
+    university_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> UniversityOut:
+    active_deleted, active_legacy = _active_universities_filter()
+    verified_count = (
+        select(func.count(User.id))
+        .where(User.university_id == University.id, User.is_verified.is_(True))
+        .correlate(University)
+        .scalar_subquery()
+    )
+    result = await db.execute(
+        select(University, verified_count.label("verified_student_count"))
+        .where(
+            University.id == university_id,
+            active_deleted,
+            active_legacy,
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(404, "University not found")
+    uni, count = row
+    item = UniversityOut.model_validate(uni)
+    item.verified_student_count = int(count or 0)
+    return item
 
 
 @router.get("/{university_id}/stats")

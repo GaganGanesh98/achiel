@@ -12,7 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api, ApiError, setToken } from "@/lib/api";
 import { apiErrorMessage, parseApiFieldErrors } from "@/lib/auth-errors";
-import { COUNTRIES } from "@/lib/countries";
+import { COUNTRY } from "@/lib/countries";
+import { translateError } from "@/lib/i18n";
 import { extractEmailDomain } from "@/lib/email-domain";
 import { cn } from "@/lib/utils";
 import type { RegisterResponse } from "@/types";
@@ -25,7 +26,7 @@ const schema = z
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
     display_name: z.string().min(2, "Display name is required").max(60),
-    country: z.string().length(2, "Select your country"),
+    country: z.literal("DE"),
     program: z.string().max(255).optional().or(z.literal("")),
     year_of_study: z.string().optional().or(z.literal("")),
     privacy_consent: z.boolean().refine((v) => v, "You must accept the privacy policy"),
@@ -116,7 +117,7 @@ export default function RegisterPage() {
           email: values.email,
           password: values.password,
           display_name: values.display_name,
-          country: values.country,
+          country: COUNTRY.code,
           program: values.program || undefined,
           year_of_study: values.year_of_study || undefined,
           privacy_consent: values.privacy_consent,
@@ -137,7 +138,7 @@ export default function RegisterPage() {
         setError(key as keyof FormValues, { message: msg });
       }
       if (Object.keys(fields).length === 0) {
-        setFormError(apiErrorMessage(err, "Registration failed"));
+        setFormError(translateError(apiErrorMessage(err, "Registration failed")));
       }
     }
   }
@@ -245,28 +246,7 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="country">
-                  Country
-                </label>
-                <select
-                  id="country"
-                  suppressHydrationWarning
-                  className={cn(
-                    "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  )}
-                  {...register("country")}
-                >
-                  {COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.country && (
-                  <p className="text-xs text-destructive">{errors.country.message}</p>
-                )}
-              </div>
+              <input type="hidden" value={COUNTRY.code} {...register("country")} />
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium" htmlFor="program">

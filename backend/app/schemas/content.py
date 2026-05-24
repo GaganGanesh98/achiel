@@ -53,7 +53,6 @@ class PostOut(BaseModel):
 class PostFeedQuery(BaseModel):
     topic: Topic | None = None
     university_id: UUID | None = None
-    country: str | None = Field(default=None, min_length=2, max_length=2)
     sort: str = Field(default="new", pattern="^(new|top|hot)$")
     cursor: str | None = None
     limit: int = Field(default=20, ge=1, le=50)

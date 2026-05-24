@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -16,9 +17,13 @@ from app.core.security import (
 from app.models import User, VerificationStatus
 from app.services import university_email as uni_email
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ConfirmEmailRequest,
+    ForgotPasswordRequest,
     MessageResponse,
     RegisterResponse,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     Token,
     UserLogin,
     UserOut,
@@ -28,6 +33,11 @@ from app.schemas.auth import (
 )
 from app.services import email_verification as email_verif
 from app.services import verification as verif
+from app.services.email import email_service
+from app.services.email_templates import reset_password as reset_password_email
+from app.services.email_templates import verify_email as verify_email_template
+from app.services import tokens as token_store
+from app.services.german_catalogue import NON_GERMAN_DOMAIN_KEY
 from app.services.universities import lookup_university
 
 logger = logging.getLogger(__name__)
@@ -36,8 +46,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 DOMAIN_REJECTED_MESSAGE = (
-    "Email domain not allowed. We only accept verified university emails."
+    "CampusVoice ist derzeit nur für Studierende an deutschen Hochschulen."
 )
+FORGOT_PASSWORD_MESSAGE = "If an account exists, an email has been sent."
+EMAIL_VERIFICATION_MESSAGE = "If your account is eligible, a verification email has been sent."
+INVALID_RESET_LINK = "Invalid or expired reset link."
+INVALID_EMAIL_LINK = "Invalid or expired verification link."
+WRONG_CURRENT_PASSWORD = "Current password is incorrect."
 
 
 def _domain_rejected() -> HTTPException:
@@ -68,6 +83,8 @@ async def register(
         country_hint=payload.country.upper(),
     )
     if validation.status == "rejected":
+        if validation.reason == NON_GERMAN_DOMAIN_KEY:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, validation.reason)
         raise _domain_rejected()
 
     university_name = lookup_university(email)
@@ -88,7 +105,7 @@ async def register(
         email=email,
         hashed_password=hash_password(payload.password),
         display_name=payload.display_name,
-        country=payload.country.upper(),
+        country=payload.country.upper() or "DE",
         university=university_name,
         program=payload.program,
         year_of_study=payload.year_of_study,
@@ -224,3 +241,116 @@ async def update_me(
     await db.commit()
     await db.refresh(user, ["university_link"])
     return user
+
+
+def _app_url(path: str) -> str:
+    base = settings.APP_BASE_URL.rstrip("/")
+    return f"{base}{path}"
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("3/15minutes")
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    email = payload.email.lower()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user and user.is_active:
+        raw_token, token_hash = token_store.generate_token()
+        await token_store.store_token(
+            token_store.PWRESET_PREFIX,
+            token_hash,
+            user.id,
+            token_store.PWRESET_TTL_SECONDS,
+        )
+        reset_url = _app_url(f"/reset-password?token={raw_token}")
+        subject, html, text = reset_password_email(user.display_name, reset_url)
+        await email_service.send_email(user.email, subject, html, text)
+
+    return MessageResponse(message=FORGOT_PASSWORD_MESSAGE)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    user_id = await token_store.consume_token(
+        token_store.PWRESET_PREFIX, payload.token
+    )
+    if user_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, INVALID_RESET_LINK)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, INVALID_RESET_LINK)
+
+    user.hashed_password = hash_password(payload.new_password)
+    await db.commit()
+
+    return MessageResponse(message="Password updated.")
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    payload: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user_required),
+) -> MessageResponse:
+    if not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, WRONG_CURRENT_PASSWORD)
+
+    user.hashed_password = hash_password(payload.new_password)
+    await db.commit()
+
+    return MessageResponse(message="Password updated.")
+
+
+@router.post("/request-email-verification", response_model=MessageResponse)
+@limiter.limit("3/hour")
+async def request_email_verification(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user_required),
+) -> MessageResponse:
+    await db.refresh(user)
+    if user.email_confirmed_at is None:
+        raw_token, token_hash = token_store.generate_token()
+        await token_store.store_token(
+            token_store.EMAILVERIFY_PREFIX,
+            token_hash,
+            user.id,
+            token_store.EMAILVERIFY_TTL_SECONDS,
+        )
+        verify_url = _app_url(f"/verify-email?token={raw_token}")
+        subject, html, text = verify_email_template(user.display_name, verify_url)
+        await email_service.send_email(user.email, subject, html, text)
+
+    return MessageResponse(message=EMAIL_VERIFICATION_MESSAGE)
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def confirm_email_address(
+    payload: ConfirmEmailRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    user_id = await token_store.consume_token(
+        token_store.EMAILVERIFY_PREFIX, payload.token
+    )
+    if user_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, INVALID_EMAIL_LINK)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, INVALID_EMAIL_LINK)
+
+    user.email_confirmed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return MessageResponse(message="Email confirmed.")

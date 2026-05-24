@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CountrySwitcher } from "@/components/country-switcher";
+import { UniversitySearch } from "@/components/university-search";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { COUNTRY } from "@/lib/countries";
 import { api, clearToken, getToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { User } from "@/types";
@@ -61,12 +62,15 @@ export function AppHeader() {
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
         <Link
           href={user ? "/dashboard" : "/"}
-          className="text-lg font-semibold tracking-tight shrink-0"
+          className="text-lg font-semibold tracking-tight shrink-0 flex items-center gap-1.5"
         >
+          <span aria-hidden>{COUNTRY.flag}</span>
           CampusVoice
         </Link>
 
         <div className="flex items-center gap-3 sm:gap-4">
+          <UniversitySearch compact />
+
           {user && (
             <nav className="hidden sm:flex items-center gap-4">
               {NAV.map(({ href, label }) => (
@@ -82,8 +86,6 @@ export function AppHeader() {
               ))}
             </nav>
           )}
-
-          {user && <CountrySwitcher variant="compact" />}
 
           {user ? (
             <DropdownMenu>

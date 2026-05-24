@@ -22,8 +22,12 @@ export interface University {
   id: string;
   name: string;
   domain: string;
-  country: string;
   city: string | null;
+  short_name?: string | null;
+  state?: string | null;
+  type?: string | null;
+  website?: string | null;
+  verified_student_count?: number;
 }
 
 export interface User {
@@ -35,6 +39,7 @@ export interface User {
   program: string | null;
   year_of_study: string | null;
   is_verified: boolean;
+  email_confirmed_at?: string | null;
   is_admin?: boolean;
   verification_status: VerificationStatus;
   university_link?: University | null;

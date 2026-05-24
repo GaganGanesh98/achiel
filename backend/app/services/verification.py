@@ -25,6 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models import University, User, VerificationStatus
 from app.models.domain import AllowedDomain
+from app.services.german_catalogue import (
+    find_university_by_email_domain,
+    is_german_scoped_domain,
+    matches_catalogue_domain,
+)
 from app.services.university_email import extract_domain as email_extract_domain
 
 logger = logging.getLogger(__name__)
@@ -44,13 +49,33 @@ def extract_domain(email: str) -> str:
     return email_extract_domain(email)
 
 
+def _domain_variants(domain: str) -> list[str]:
+    """e.g. 'stud.tu-berlin.de' -> ['stud.tu-berlin.de', 'tu-berlin.de']."""
+    parts = domain.split(".")
+    return [".".join(parts[i:]) for i in range(len(parts) - 1)]
+
+
 async def _domain_is_allowed(db: AsyncSession, domain: str) -> bool:
+    if matches_catalogue_domain(domain):
+        return True
+    if not is_german_scoped_domain(domain):
+        return False
+    candidates = _domain_variants(domain)
     result = await db.execute(
-        select(AllowedDomain.domain).where(AllowedDomain.domain == domain)
+        select(AllowedDomain.domain).where(AllowedDomain.domain.in_(candidates))
     )
     if result.scalar_one_or_none() is not None:
         return True
-    return domain in settings.ALLOWED_EMAIL_DOMAINS
+    env_domains = settings.ALLOWED_EMAIL_DOMAINS
+    return any(c in env_domains for c in candidates)
+
+
+def _matching_env_meta(domain: str) -> tuple[str, dict] | None:
+    env_domains = settings.ALLOWED_EMAIL_DOMAINS
+    for candidate in _domain_variants(domain):
+        if candidate in env_domains:
+            return candidate, env_domains[candidate]
+    return None
 
 
 async def get_or_reject_university(db: AsyncSession, email: str) -> University:
@@ -59,18 +84,26 @@ async def get_or_reject_university(db: AsyncSession, email: str) -> University:
 
     if not await _domain_is_allowed(db, domain):
         raise DomainNotAllowed(
-            f"'{domain}' is not a recognised university domain. "
+            f"'{domain}' is not a recognised German university domain. "
             f"Contact support if your institution should be added."
         )
 
-    meta = settings.ALLOWED_EMAIL_DOMAINS.get(domain, {})
-    result = await db.execute(select(University).where(University.domain == domain))
+    uni = await find_university_by_email_domain(db, email)
+    if uni is not None:
+        return uni
+
+    match = _matching_env_meta(domain)
+    if match is not None:
+        canonical_domain, meta = match
+    else:
+        canonical_domain, meta = domain, {}
+
+    result = await db.execute(select(University).where(University.domain == canonical_domain))
     uni = result.scalar_one_or_none()
     if uni is None:
         uni = University(
-            domain=domain,
-            name=meta.get("name") or domain,
-            country=meta.get("country") or "XX",
+            domain=canonical_domain,
+            name=meta.get("name") or canonical_domain,
             city=meta.get("city"),
         )
         db.add(uni)

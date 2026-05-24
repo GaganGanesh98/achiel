@@ -164,6 +164,8 @@ export default function MePage() {
         </button>
       </form>
 
+      <SecurityCard user={user} />
+
       <button
         type="button"
         onClick={signOut}
@@ -172,6 +174,124 @@ export default function MePage() {
         Sign out
       </button>
     </main>
+  );
+}
+
+function SecurityCard({ user }: { user: User }) {
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+
+  async function onChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(false);
+    const fd = new FormData(e.currentTarget);
+    const current = String(fd.get("current_password"));
+    const next = String(fd.get("new_password"));
+    const confirm = String(fd.get("confirm_password"));
+    if (next !== confirm) {
+      setPwError("New passwords do not match");
+      return;
+    }
+    setPwLoading(true);
+    try {
+      await api("/auth/change-password", {
+        method: "POST",
+        body: { current_password: current, new_password: next },
+      });
+      setPwSuccess(true);
+      e.currentTarget.reset();
+    } catch (err) {
+      setPwError(err instanceof ApiError ? err.message : "Could not update password");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
+  async function sendVerificationLink() {
+    setVerifyMsg(null);
+    setVerifyLoading(true);
+    try {
+      await api("/auth/request-email-verification", { method: "POST" });
+      setVerifyMsg("If your account is eligible, a verification email has been sent.");
+    } catch (err) {
+      setVerifyMsg(
+        err instanceof ApiError ? err.message : "Could not send verification email"
+      );
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border p-4 space-y-4">
+      <h2 className="text-lg font-medium">Security</h2>
+
+      <form onSubmit={onChangePassword} className="space-y-3">
+        <p className="text-sm font-medium">Change password</p>
+        <input
+          name="current_password"
+          type="password"
+          required
+          placeholder="Current password"
+          className="w-full rounded-md border border-input px-3 py-2 text-sm"
+        />
+        <input
+          name="new_password"
+          type="password"
+          required
+          minLength={8}
+          maxLength={128}
+          placeholder="New password"
+          className="w-full rounded-md border border-input px-3 py-2 text-sm"
+        />
+        <input
+          name="confirm_password"
+          type="password"
+          required
+          minLength={8}
+          maxLength={128}
+          placeholder="Confirm new password"
+          className="w-full rounded-md border border-input px-3 py-2 text-sm"
+        />
+        {pwError && <p className="text-sm text-destructive">{pwError}</p>}
+        {pwSuccess && (
+          <p className="text-sm text-green-700 dark:text-green-400">Password updated.</p>
+        )}
+        <button
+          type="submit"
+          disabled={pwLoading}
+          className="rounded-md border border-input px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+        >
+          {pwLoading ? "Updating…" : "Update password"}
+        </button>
+      </form>
+
+      <div className="border-t pt-4 space-y-2">
+        <p className="text-sm font-medium">Email confirmation</p>
+        {user.email_confirmed_at ? (
+          <p className="text-sm text-muted-foreground">
+            Confirmed on {new Date(user.email_confirmed_at).toLocaleString()}
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">Not confirmed yet.</p>
+            <button
+              type="button"
+              onClick={sendVerificationLink}
+              disabled={verifyLoading}
+              className="rounded-md border border-input px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+            >
+              {verifyLoading ? "Sending…" : "Send verification link"}
+            </button>
+          </>
+        )}
+        {verifyMsg && <p className="text-sm text-muted-foreground">{verifyMsg}</p>}
+      </div>
+    </section>
   );
 }
 
