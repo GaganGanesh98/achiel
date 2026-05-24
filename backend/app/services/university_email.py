@@ -1,4 +1,4 @@
-"""Layered university email validation for signup."""
+"""Layered university email validation for signup (Germany-only)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,11 @@ from app.models.domain import (
     PendingDomainConfidence,
     PendingDomainStatus,
 )
+from app.services.german_catalogue import (
+    NON_GERMAN_DOMAIN_KEY,
+    is_german_scoped_domain,
+    matches_catalogue_domain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +33,7 @@ DISPOSABLE_URL = (
 )
 
 HIGH_CONFIDENCE_PATTERNS = [
-    re.compile(r"\.edu$"),
-    re.compile(r"\.edu\.[a-z]{2,3}$"),
-    re.compile(r"\.ac\.[a-z]{2,3}$"),
+    re.compile(r"\.de$"),
     re.compile(r"^(stud|student|students)[.-]"),
     re.compile(r"\.(uni|hochschule|fh)-"),
     re.compile(r"-(university|universitaet|universite)\."),
@@ -92,11 +95,32 @@ def domain_matches_high_confidence(domain: str) -> bool:
     return any(p.search(domain) for p in HIGH_CONFIDENCE_PATTERNS)
 
 
+def _domain_variants(domain: str) -> list[str]:
+    parts = domain.split(".")
+    variants: list[str] = []
+    for i in range(len(parts) - 1):
+        variants.append(".".join(parts[i:]))
+    return variants
+
+
 async def is_domain_allowed(db: AsyncSession, domain: str) -> bool:
+    if matches_catalogue_domain(domain):
+        return True
+
+    if not is_german_scoped_domain(domain):
+        return False
+
+    candidates = _domain_variants(domain)
     result = await db.execute(
-        select(AllowedDomain.domain).where(AllowedDomain.domain == domain)
+        select(AllowedDomain.domain).where(AllowedDomain.domain.in_(candidates))
     )
-    return result.scalar_one_or_none() is not None
+    if result.scalar_one_or_none() is not None:
+        return True
+
+    from app.core.config import settings
+
+    env_domains = settings.ALLOWED_EMAIL_DOMAINS
+    return any(c in env_domains for c in candidates)
 
 
 async def _upsert_pending_domain(
@@ -117,7 +141,7 @@ async def _upsert_pending_domain(
                 first_seen_email=email,
                 request_count=1,
                 confidence=confidence,
-                country_hint=country_hint,
+                country_hint=country_hint or "DE",
                 first_seen_at=now,
                 last_seen_at=now,
                 status=PendingDomainStatus.PENDING,
@@ -140,37 +164,35 @@ async def validate_university_email(
     domain = extract_domain(email)
 
     if await is_domain_allowed(db, domain):
-        return EmailValidationResult("allowed", "Domain is on the university allowlist")
+        if domain_is_disposable(domain):
+            return EmailValidationResult("rejected", "Disposable email domains are not allowed")
+        if not domain_has_mx(domain):
+            return EmailValidationResult("rejected", "Domain has no valid MX records")
+        return EmailValidationResult("allowed", "Domain is on the German university catalogue")
 
     if domain_is_disposable(domain):
         return EmailValidationResult("rejected", "Disposable email domains are not allowed")
 
+    if not is_german_scoped_domain(domain):
+        return EmailValidationResult("rejected", NON_GERMAN_DOMAIN_KEY)
+
     if not domain_has_mx(domain):
         return EmailValidationResult("rejected", "Domain has no valid MX records")
 
-    if domain_matches_high_confidence(domain):
-        if record_pending:
-            await _upsert_pending_domain(
-                db,
-                domain=domain,
-                email=email,
-                confidence=PendingDomainConfidence.HIGH,
-                country_hint=country_hint,
-            )
-        return EmailValidationResult(
-            "pending",
-            "Domain looks like a university but is not on our allowlist yet",
-        )
-
+    confidence = (
+        PendingDomainConfidence.HIGH
+        if domain_matches_high_confidence(domain)
+        else PendingDomainConfidence.LOW
+    )
     if record_pending:
         await _upsert_pending_domain(
             db,
             domain=domain,
             email=email,
-            confidence=PendingDomainConfidence.LOW,
-            country_hint=country_hint,
+            confidence=confidence,
+            country_hint=country_hint or "DE",
         )
     return EmailValidationResult(
         "pending",
-        "Domain is not recognised; submitted for admin review",
+        "Domain looks like a German university but is not on our catalogue yet",
     )

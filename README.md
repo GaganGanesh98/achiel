@@ -1,6 +1,6 @@
 # CampusVoice
 
-A verified-student platform for sharing experiences about universities, study-abroad life, cost of living, culture, and trending topics. MVP focuses on the **global dashboard** — opinions and discussion threads from verified students worldwide.
+A verified-student platform for sharing experiences about **German universities and Hochschulen** — study life, cost of living, culture, and campus topics. Only students with verified email domains at accredited German institutions can post.
 
 ## Stack
 

@@ -14,16 +14,36 @@ from app.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
 _optional_bearer = HTTPBearer(auto_error=False)
 _required_bearer = HTTPBearer(auto_error=True)
 
 
+def _password_bytes_for_bcrypt(password: str) -> bytes:
+    return password.encode("utf-8")[:BCRYPT_MAX_PASSWORD_BYTES]
+
+
+def truncate_password_for_bcrypt(password: str) -> str:
+    """Return password truncated to bcrypt's 72-byte UTF-8 limit.
+
+    Bcrypt only uses the first 72 bytes of the UTF-8 encoding. Passwords longer
+    than that are truncated before hashing so registration/login stay consistent.
+    """
+    encoded = password.encode("utf-8")
+    if len(encoded) <= BCRYPT_MAX_PASSWORD_BYTES:
+        return password
+    return encoded[:BCRYPT_MAX_PASSWORD_BYTES].decode("utf-8", errors="ignore")
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_password_bytes_for_bcrypt(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(
+        _password_bytes_for_bcrypt(plain_password), hashed_password
+    )
 
 
 def create_access_token(*, subject: str) -> str:

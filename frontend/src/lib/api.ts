@@ -50,12 +50,24 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url.toString(), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+  } catch (e) {
+    // Network failure / CORS / backend down. Surface a useful message
+    // instead of letting the caller fall back to a generic string.
+    const reason = e instanceof Error ? e.message : "Network error";
+    throw new ApiError(
+      0,
+      `Couldn't reach the API at ${API_URL}. Is the backend running? (${reason})`,
+      { cause: e },
+    );
+  }
 
   if (!res.ok) {
     let detail: unknown;
@@ -64,10 +76,26 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     } catch {
       detail = await res.text();
     }
-    const msg =
-      typeof detail === "object" && detail && "detail" in detail
-        ? String((detail as { detail: unknown }).detail)
-        : res.statusText;
+    let msg = res.statusText || `HTTP ${res.status}`;
+    if (typeof detail === "object" && detail && "detail" in detail) {
+      const d = (detail as { detail: unknown }).detail;
+      // FastAPI 422 returns an array of {loc, msg, ...} — flatten for display.
+      if (Array.isArray(d)) {
+        msg =
+          d
+            .map((item) => {
+              const v = item as { msg?: string; loc?: unknown[] };
+              const field = Array.isArray(v.loc) ? v.loc[v.loc.length - 1] : "";
+              return field ? `${field}: ${v.msg}` : v.msg;
+            })
+            .filter(Boolean)
+            .join("; ") || msg;
+      } else if (typeof d === "string") {
+        msg = d;
+      }
+    } else if (typeof detail === "string" && detail) {
+      msg = detail;
+    }
     throw new ApiError(res.status, msg, detail);
   }
 

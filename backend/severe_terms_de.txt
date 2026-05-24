@@ -1,0 +1,7 @@
+# German severe terms (§ 130 StGB relevant). One term per line, lowercase substring match.
+# Ethnic slurs and additional phrases: set SEVERE_TERMS_DE_JSON in production (not committed).
+sieg heil
+heil hitler
+holocaust ist erfunden
+juden raus
+auschwitz lüge
